@@ -7,16 +7,15 @@ import os
 
 app = FastAPI()
 
-# Kimlik doğrulama anahtarını yükleyin
+# Load the authentication key
 current_dir = os.path.dirname(os.path.abspath("token.json"))
 credentials = Credentials.from_authorized_user_file(current_dir + '/token.json')
-# Google Sheets API'si üzerinde bir hizmet oluşturun
+# Create a service on the Google Sheets API
 service = build('sheets', 'v4', credentials=credentials)
-# Tüm dosyaları listelemek için Google Drive API'sini kullanın
+# Use the Google Drive API to list all files
 drive_service = build('drive', 'v3', credentials=credentials)
 
-
-# MySQL bağlantı ayarları
+# MySQL connection settings
 config = {
     'user': 'root',
     'password': 'test',
@@ -25,8 +24,7 @@ config = {
     'raise_on_warnings': True
 }
 
-
-# SpreadSheet API ayarları
+# Spreadsheet API settings
 
 # The A1 notation of the values to retrieve.
 range_ = 'upwork-test!A:D'  # TODO: Update placeholder value.
@@ -35,11 +33,9 @@ value_render_option = 'FORMATTED_VALUE'  # TODO: Update placeholder value.
 # The default dateTime render option is [DateTimeRenderOption.SERIAL_NUMBER].
 date_time_render_option = 'FORMATTED_STRING'  # TODO: Update placeholder value.
 
-
-
 def test_db_connection():
     try:
-        # MySQL bağlantısı oluşturma
+        # Create a MySQL connection
         cnx = mysql.connector.connect(**config)
         cnx.close()
         return True
@@ -53,8 +49,8 @@ async def test_db_connection_api():
         return {"message": "DB connection successful"}
     else:
         raise HTTPException(status_code=500, detail="DB connection failed")
-    
-# Test Google Drive API 
+
+# Test Google Drive API
 @app.get("/api/testlistfiles")
 async def list_files():
     files = drive_service.files().list().execute().get('files', [])
@@ -80,11 +76,9 @@ async def get_table():
 
     return {"result": result}
 
-
-
 @app.get("/api/syncData")
 def sync_data():
-    # Google Sheets API'si aracılığıyla verileri alın
+    # Retrieve data using the Google Sheets API
     files = drive_service.files().list().execute().get('files', [])
     for file in files:
         if file['mimeType'] == 'application/vnd.google-apps.spreadsheet':
@@ -92,18 +86,18 @@ def sync_data():
                 # The ID of the spreadsheet to retrieve data from.
                 spreadsheet_id = file['id']
                 break
-    
-    sheet_range = range_  # İstenilen sayfa ve hücre aralığını belirtin
+
+    sheet_range = range_  # Specify the desired sheet and cell range
     sheet_data = service.spreadsheets().values().get(spreadsheetId=spreadsheet_id, range=sheet_range).execute()
     values = sheet_data.get('values', [])
-    
-    # MySQL bağlantısı oluşturma
+
+    # Create a MySQL connection
     cnx = mysql.connector.connect(**config)
 
-    # Alınan verileri MySQL veritabanına yazın
+    # Write the retrieved data to the MySQL database
     cursor = cnx.cursor()
     for row in values[2:]:
-        # Örneğin, verileri 'students' tablosuna yazalım
+        # For example, let's write the data to the 'students' table
         query = "INSERT INTO {} (name, surname, school) VALUES (%s, %s, %s)".format("students")
         cursor.execute(query, (row[1], row[2], row[3]))
     cnx.commit()
@@ -112,9 +106,7 @@ def sync_data():
 
     return {"message": "Data synchronized successfully"}
 
-
-
-# FastAPI uygulamasını çalıştırma
+# Run the FastAPI application
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run("main:app", host="127.0.0.1", port=8000, reload=True)
